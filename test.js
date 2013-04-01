@@ -2,15 +2,17 @@ var Fs = require('fs');
 var Http = require('http');
 var Sys = require('sys');
 var Url = require('url');
+var Nacl = require('./nacl.js');
 
-function sha1sum(blob) {
-    var hash = require('crypto').createHash('sha1');
-    hash.update(blob);
-    var hex = hash.digest('hex');
-    return hex;
+
+function hash(string) {
+    return Nacl.to_hex(Nacl.crypto_hash_string(string));
 }
 
-var evaluatorHash = sha1sum(Fs.readFileSync('games/rps.js'));
+var evaluatorHash = hash(Fs.readFileSync('games/rps.js'));
+
+console.log('evaluator: ' + evaluatorHash);
+Fs.writeFileSync("sha512/" + evaluatorHash, Fs.readFileSync('games/rps.js'));
 
 var requestOpts = {
     host: "localhost",
@@ -31,13 +33,16 @@ function getWarrant(cont) {
     console.log("Requesting " + JSON.stringify(requestOpts));
     var req = Http.request(requestOpts, function(res) {
         console.log("Got response: " + res.statusCode);
+        if (res.statusCode != 200) {
+            process.exit(res.statusCode);
+        }
         var body = '';
         res.on('data', function(chunk) {
             body += chunk;
         });
         res.on('end', function() {
             console.log(body);
-            console.log("warrant: " + sha1sum(body));
+            console.log("warrant: " + hash(body));
             warrant = JSON.parse(body);
             console.log("warrant address: " + warrant.address);
             cont(warrant);

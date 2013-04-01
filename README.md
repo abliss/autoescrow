@@ -54,7 +54,7 @@ and the autoescrow server, are considered public.
 # DOES define a small namespace for its RPCs.
 
 # DOESN'T define a namespace for content.  All content is addressable only by
-its sha1sum.
+its sha512sum.
 
 # DOES some light caching and indexing for performance.
 
@@ -93,7 +93,7 @@ reimplementations are welcome.
 
 1. a player POSTs a gameHeader to /new: 
 {
-   evaluator: "sha1sum of a .jsfile defining evaluator. For now, assume to a js module.",
+   evaluator: "sha512sum of a .jsfile defining evaluator. For now, assume to a js module.",
    players: [
      {
        key: "public key",
@@ -116,7 +116,7 @@ devoted to this game and returns/publishes this warrant:
 
 {
    address: "bitcoin address",
-   gameId: "sha1 of gameHeader",
+   gameId: "sha512 of gameHeader",
    camliVersion: 1,
    camliSigner: "server's public key"
 ,"camliSig":"signature of above"}

@@ -7,6 +7,7 @@ var Nacl = require("./nacl.js");
 // the servers keys, which will either be generated or read from disk on startup.
 var privKey;
 var pubKey;
+
 if (process.argv.length > 2) {
     if (process.argv[2] === "genkey") {
         console.log("Generating new keypair.");
@@ -27,17 +28,14 @@ if (process.argv.length > 2) {
 }
 console.log("pubkey: " + Nacl.to_hex(pubKey));
 
-
-function sha1sum(blob) {
-    var hash = require('crypto').createHash('sha1');
-    hash.update(blob);
-    var hex = hash.digest('hex');
-    return hex;
+function hash(string) {
+    return Nacl.to_hex(Nacl.crypto_hash_string(string));
 }
+
 function save(blob) {
-    var sha1 = sha1sum(blob);
-    Fs.writeFileSync('sha1/' + sha1, blob);
-    return sha1;
+    var blobHash = hash(blob);
+    Fs.writeFileSync('sha512/' + blobHash, blob);
+    return blobHash;
 }
 function signObj(obj) {
     var blob = JSON.stringify(obj);
@@ -66,9 +64,9 @@ function verifyBlob(blob) {
     return obj;
 }
 
-function checkEvaluator(sha1) {
+function checkEvaluator(blobHash) {
     // TODO: check whitelist
-    var evaluator = Fs.readFileSync('sha1/' + sha1);
+    var evaluator = Fs.readFileSync('sha512/' + blobHash);
     return true;
 }
 
@@ -155,7 +153,7 @@ function getRequestHandler(request, response) {
     var path = Url.parse(request.url).path;
     console.log("GET " + path);
     try {
-        if (path.match(/^\/sha1\/[0-9a-f]{32}./)) {
+        if (path.match(/^\/sha5121\/[0-9a-f]{32}./)) {
             response.writeHead(200, {"Content-Type":"application/octet-stream"});
             var stream = Fs.createReadStream(path);
             stream.on("error", function(e) {
@@ -186,8 +184,8 @@ function getRequestHandler(request, response) {
     }
 }
 
-function getShaSync(sha1) {
-    return Fs.readFileSync("sha1/" + sha1).toString();
+function getByHashSync(blobHash) {
+    return Fs.readFileSync("sha512/" + blobHash).toString();
 }
 
 var server = Http.createServer();
