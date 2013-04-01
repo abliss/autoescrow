@@ -2,7 +2,7 @@ var Fs = require('fs');
 var Http = require('http');
 var Sys = require('sys');
 var Url = require('url');
-var Nacl = require("./nacl.js");
+var MyCrypto = require('./my_crypto.js');
 
 // the servers keys, which will either be generated or read from disk on startup.
 var privKey;
@@ -11,7 +11,7 @@ var pubKey;
 if (process.argv.length > 2) {
     if (process.argv[2] === "genkey") {
         console.log("Generating new keypair.");
-        var kp = Nacl.crypto_sign_keypair();
+        var kp = require('./nacl.js').crypto_sign_keypair();
         Fs.writeFileSync("server-priv.bin", new Buffer(kp.signSk));
         Fs.writeFileSync("server-pub.bin", new Buffer(kp.signPk));
         privKey = kp.signSk;
@@ -26,48 +26,25 @@ if (process.argv.length > 2) {
         throw e;
     }
 }
-console.log("pubkey: " + Nacl.to_hex(pubKey));
+console.log("pubkey: " + new Buffer(pubKey).toString('hex'));
 
-// Wrappers around Nacl. All take regular strings and return hex strings.
-function cryptoHash(string) {
-    return Nacl.to_hex(Nacl.crypto_hash_string(string));
-}
-function cryptoHexSig(string, priv) {
-    var signedMessage = Nacl.crypto_sign(Nacl.encode_utf8(string), priv);
-    // Nacl puts 32 bytes of signature before the message and 32 bytes after.
-    var signature = Nacl.to_hex(signedMessage.subarray(0,32)) +
-        Nacl.to_hex(signedMessage.subarray(signedMessage.length - 32));
-    return signature;
-}
-function cryptoVerify(string, hexSig, pub) {
-    var sigBytes = new Buffer(hexSig, 'hex');
-    var blobBuf = new Buffer(string, 'utf8');
-    var signedMessage = new Buffer(blobBuf.length + 64);
-    var off = 0;
-    off = sigBytes.copy(signedMessage, 0, 0, 32);
-    off += blobBuf.copy(signedMessage, off);
-    off += sigBytes.copy(signedMessage, off, 32);
-
-    var verified = Nacl.crypto_sign_open(signedMessage, pub);
-    return (verified !== null);
-}
 
 function save(blob) {
-    var blobHash = cryptoHash(blob);
+    var blobHash = MyCrypto.hash(blob);
     Fs.writeFileSync('sha512/' + blobHash, blob);
     return blobHash;
 }
 function signObj(obj) {
     var blob = JSON.stringify(obj);
     blob = blob.replace(/}\s*/,'');
-    var signature = cryptoHexSig(blob, privKey);
+    var signature = MyCrypto.hexSig(blob, privKey);
     blob += '\n,"naclSig":"' + signature + '"}\n';
     return blob;
 }
 function verifyBlob(blob) {
     var sigHex = JSON.parse(blob).naclSig;
     blob = blob.replace(/\s*,"naclSig":"[0-9a-f]+"}\s*$/,'');
-    var verified = cryptoVerify(blob, sigHex, pubKey);
+    var verified = MyCrypto.verify(blob, sigHex, pubKey);
     if (!verified) {
         return null;
     }

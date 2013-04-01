@@ -2,14 +2,11 @@ var Fs = require('fs');
 var Http = require('http');
 var Sys = require('sys');
 var Url = require('url');
-var Nacl = require('./nacl.js');
+var MyCrypto = require('./my_crypto.js');
 
 
-function hash(string) {
-    return Nacl.to_hex(Nacl.crypto_hash_string(string));
-}
 
-var evaluatorHash = hash(Fs.readFileSync('games/rps.js'));
+var evaluatorHash = MyCrypto.hash(Fs.readFileSync('games/rps.js'));
 
 console.log('evaluator: ' + evaluatorHash);
 Fs.writeFileSync("sha512/" + evaluatorHash, Fs.readFileSync('games/rps.js'));
@@ -33,7 +30,7 @@ var gameHeader = {
 };
 
 var warrant;
-var gameId = hash(JSON.stringify(gameHeader));
+var gameId = MyCrypto.hash(JSON.stringify(gameHeader));
 
 function getWarrant(cont) {
     requestOpts.method = 'POST';
@@ -50,7 +47,7 @@ function getWarrant(cont) {
         });
         res.on('end', function() {
             console.log(body);
-            console.log("warrant: " + hash(body));
+            console.log("warrant: " + MyCrypto.hash(body));
             warrant = JSON.parse(body);
             console.log("warrant address: " + warrant.address);
             cont(warrant);
