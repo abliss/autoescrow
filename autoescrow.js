@@ -42,20 +42,15 @@ function save(blob) {
 function signObj(obj) {
     var blob = JSON.stringify(obj);
     blob = blob.replace(/}\s*/,'');
-    console.log("XXXX Signing : " + blob);
     var signedMessage = Nacl.crypto_sign(Nacl.encode_utf8(blob), privKey);
     // Nacl includes the message in the signature; we prefer to put it at the end of the plaintext.
-    console.log("XXXX signedMessage: " + Nacl.to_hex(signedMessage));
     var signature = Nacl.to_hex(signedMessage.subarray(0,32)) + Nacl.to_hex(signedMessage.subarray(signedMessage.length - 32));
     blob += '\n,"naclSig":"' + signature + '"}\n';
     return blob;
 }
 function verifyBlob(blob) {
-    console.log("XXXX blob: " + blob);
     var sigBytes = new Buffer(JSON.parse(blob).naclSig, 'hex');
     blob = blob.replace(/\s*,"naclSig":"[0-9a-f]+"}\s*$/,'');
-    console.log("XXXX sigBytes " + sigBytes.toString('hex'));
-    console.log("XXXX Verifying " + blob);
     var blobBuf = new Buffer(blob, 'utf8');
     var signedMessage = new Buffer(blobBuf.length + 64);
     var off = 0;
@@ -63,13 +58,12 @@ function verifyBlob(blob) {
     off += blobBuf.copy(signedMessage, off);
     off += sigBytes.copy(signedMessage, off, 32);
 
-    console.log("XXXX signedMessage: " + signedMessage.toString("hex"));
     var verified = Nacl.crypto_sign_open(signedMessage, pubKey);
-    if (verified) {
-        return JSON.parse(Nacl.decode_utf8(verified) + "}");
-    } else {
+    if (!verified) {
         return null;
     }
+    var obj = JSON.parse(Nacl.decode_utf8(verified) + "}");
+    return obj;
 }
 
 function checkEvaluator(sha1) {
@@ -96,7 +90,7 @@ postHandlers["/new"] = function(response, body) {
         return;
     }
     // Save request for later reference
-    var gameId = save(JSON.stringify(body));
+    var gameId = save(body);
     // make warrant
     var warrant = {
         address: "TODO",
