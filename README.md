@@ -134,10 +134,9 @@ short, all payouts will be reduced by the same fraction.
 /redeem:
 
 {
-    gameHeader: {gameHeader as above},
-    evaluator: "an evaluator which matches the sha1 in the gameHeader",
+    gameHeader: "gameHeader in a form which hashes correctly"
     warrant: {warrant as above},
-    turnChain: [a terminal turnChain]
+    gameState: [a terminal signedGameState]
 }
 
 (TODO: maybe we will allow references to these objects, but for now they must all be included)
