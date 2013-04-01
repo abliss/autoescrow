@@ -19,13 +19,21 @@ var requestOpts = {
     port: "8888",
 };
 
-var gameObj = {
+var keys = [
+    {pub: Fs.readFileSync('p1-pub.bin').toString('hex'),
+     priv:Fs.readFileSync('p1-priv.bin').toString('hex')},
+    {pub: Fs.readFileSync('p2-pub.bin').toString('hex'),
+     priv:Fs.readFileSync('p2-priv.bin').toString('hex')}];
+    
+var gameHeader = {
     evaluator: evaluatorHash,
-    players: [{key:Fs.readFileSync('p1-pub.bin').toString('hex')},
-              {key:Fs.readFileSync('p2-pub.bin').toString('hex')}],
-    rake: 0.001,
+    players: [{key:keys[0].pub},
+              {key:keys[1].pub}],
+    rake: 1,
 };
 
+var warrant;
+var gameId = hash(JSON.stringify(gameHeader));
 
 function getWarrant(cont) {
     requestOpts.method = 'POST';
@@ -48,7 +56,7 @@ function getWarrant(cont) {
             cont(warrant);
         });
     });
-    req.write(JSON.stringify(gameObj));
+    req.write(JSON.stringify(gameHeader));
     req.end();
 }
 
@@ -72,5 +80,12 @@ function useWarrant(warrant) {
     
 } 
 
-
+function updateSignature(sgs, playernum) {
+    var doc = JSON.stringify(sgs.gameState.gameId) + 
+        sgs.gameState.turns.map(JSON.stringify).join('');
+    
+}
 getWarrant(useWarrant);
+
+var gameState = {gameId: gameId, turns: []};
+var signedGameState = {gameState: gameState, signatures: []};
