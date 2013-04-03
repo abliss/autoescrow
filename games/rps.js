@@ -56,14 +56,14 @@ function TurnStack(origTurns) {
     };
 }
 
-function VerifierBuilder(numPlayers) {
-    // An empty Verifier will simply ensure the players take their turns in
+function EvaluatorBuilder(numPlayers) {
+    // An empty Evaluator will simply ensure the players take their turns in
     // order and sign them properly.  Using the following mutators you can code
     // your game rules.
 
     // Each mutator takes a callback.  When the turns are going by to satisfy
-    // the expectation of the mutator, the verifier will take care of business.
-    // If anything goes wrong, the verifier will surface this.  When the
+    // the expectation of the mutator, the evaluator will take care of business.
+    // If anything goes wrong, the evaluator will surface this.  When the
     // expected result is available, the callback will be called with the
     // result, the GameHeader, and the game's state object.  The callback should
     // (a) throw an error if the result is illegal; (b) mutate the state object
@@ -193,7 +193,7 @@ function VerifierBuilder(numPlayers) {
     };
 }
 
-this.verifier = new VerifierBuilder(2).simulChoice(3, -1).addVisitor(
+this.evaluator = new EvaluatorBuilder(2).simulChoice(3, -1).addVisitor(
     function(turns, state) {
         var diff = (3 + state.choices[1] - state.choices[0]) % 3;
         if (diff == 0) {

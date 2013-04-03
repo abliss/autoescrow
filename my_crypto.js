@@ -27,8 +27,8 @@ this.verify = function(string, hexSig, pub) {
     var verified = Nacl.crypto_sign_open(signedMessage, pubBuf);
     return (verified !== null);
 };
-this.random_bytes = function(num) {
-    return Nacl.random_bytes(num);
+this.randomHex = function(num) {
+    return Nacl.to_hex(Nacl.random_bytes(num));
 }
 // TODO: this should be a protobuffer maybe?
 this.serialize = function(obj) {

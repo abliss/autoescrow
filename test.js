@@ -11,7 +11,7 @@ Fs.writeFileSync("sha512/" + evaluatorHash, Fs.readFileSync('games/rps.js'));
 
 var requestOpts = {
     host: "localhost",
-    port: "8888",
+    port: "8888"
 };
 
 var keys = [
@@ -19,12 +19,13 @@ var keys = [
      priv:Fs.readFileSync('p1-priv.bin')},
     {pub: Fs.readFileSync('p2-pub.bin').toString('hex'),
      priv:Fs.readFileSync('p2-priv.bin')}];
-    
+
 var gameHeader = {
     evaluator: evaluatorHash,
     players: [{key:keys[0].pub},
               {key:keys[1].pub}],
     rake: 1,
+    nonce: Math.random()
 };
 
 var warrant;
@@ -55,7 +56,7 @@ function getWarrant(cont) {
     req.end();
 }
 
-function redeem(warrant) {
+function redeem(signedGameState, warrant) {
     requestOpts.method = 'POST';
     requestOpts.path = '/redeem';
     console.log("Requesting " + JSON.stringify(requestOpts));
@@ -69,11 +70,11 @@ function redeem(warrant) {
             console.log(body);
         });
     });
-    var redemption = {warrant: warrant};
+    var redemption = {warrant: warrant, signedGameState: signedGameState};
     req.write(JSON.stringify(redemption));
     req.end();
-    
-} 
+
+}
 
 
 
@@ -82,7 +83,7 @@ function verify(v, sgs) {
     console.log("Turns: " + sgs.gameState.turns.length);
     console.log("  result: " + JSON.stringify(v(MyCrypto, sgs)));
 }
-function testVerifier(v, spud0, spud1) {
+function testEvaluator(v, spud0, spud1) {
     var gameState = {gameHeader: gameHeader, turns: []};
     var sgs = {gameState: gameState, signatures: []};
     function signBlank(playerNum) {
@@ -91,7 +92,7 @@ function testVerifier(v, spud0, spud1) {
     }
     signBlank(0);
     signBlank(1);
-    verify(v, sgs);
+    if (v) verify(v, sgs);
     function makeTurn(playerNum, turnObj) {
         turnObj.who = playerNum;
         gameState.turns.push(turnObj);
@@ -99,20 +100,23 @@ function testVerifier(v, spud0, spud1) {
             sgs.gameState.turns.map(MyCrypto.serialize).join('');
         sgs.signatures[playerNum] = MyCrypto.hexSig(doc, keys[playerNum].priv);
     }
-    var salt0 = {spud:spud0, random:MyCrypto.random_bytes(32)};
+    var salt0 = {spud:spud0, random:MyCrypto.randomHex(32)};
     var hash0 = MyCrypto.hash(MyCrypto.serialize(salt0));
     makeTurn(0, {hash:hash0});
-    verify(v, sgs);
-    var salt1 = {spud:spud1, random:MyCrypto.random_bytes(32)};
+    if (v) {verify(v, sgs);}
+    var salt1 = {spud:spud1, random:MyCrypto.randomHex(32)};
     var hash1 = MyCrypto.hash(MyCrypto.serialize(salt1));
     makeTurn(1, {hash:hash1});
-    verify(v, sgs);
+    if (v) verify(v, sgs);
     makeTurn(0, {salt:salt0});
-    verify(v, sgs);
+    if (v) verify(v, sgs);
     makeTurn(1, {salt:salt1});
-    verify(v, sgs);
+    if (v) verify(v, sgs);
+    return sgs;
 }
 
-//getWarrant(testWarrant);
-var verifier = require('./games/rps.js').verifier;
-testVerifier(verifier, 0, 2);
+var evaluator;
+//evaluator = require('./games/rps.js').evaluator;
+var sgs = testEvaluator(evaluator, 0, 2);
+console.log("==== gameState:\n" + JSON.stringify(sgs));
+getWarrant(function(warrant) {redeem(sgs, warrant);});

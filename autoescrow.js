@@ -52,10 +52,9 @@ function verifyBlob(blob) {
     return obj;
 }
 
-function checkEvaluator(blobHash) {
+function getEvaluator(blobHash) {
     // TODO: check whitelist
-    var evaluator = Fs.readFileSync('sha512/' + blobHash);
-    return true;
+    return require('./sha512/' + blobHash).evaluator;
 }
 
 var postHandlers = {};
@@ -69,9 +68,10 @@ postHandlers["/new"] = function(response, body) {
         return;
     }
     // Check for an acceptable evaluator
-    if (!checkEvaluator(reqObj.evaluator)) {
+    if (!getEvaluator(reqObj.evaluator)) {
         response.writeHead(403, "Escrow Declined");
-        response.write("Evaluator " + reqObj.evaluator + "unnaceptable.\r\n\r\n");
+        response.write("Evaluator " + reqObj.evaluator +
+                       "unnaceptable.\r\n\r\n");
         response.end();
         return;
     }
@@ -79,7 +79,7 @@ postHandlers["/new"] = function(response, body) {
     var gameId = save(body);
     // make warrant
     var warrant = {
-        address: "TODO",
+        address: "TODO:" + Math.random(),
         gameId: gameId
     };
     var signedWarrant = signObj(warrant);
@@ -93,13 +93,32 @@ postHandlers["/redeem"] = function(response, body) {
     // Exctract and verify the warrant
     // TODO: for now we are relying on the server's canonicalizing json format.
     if (!verifyBlob(JSON.stringify(reqObj.warrant))) {
-        response.writeHead(413, {"Content-Type":"text/plain"});
+        response.writeHead(400, {"Content-Type":"text/plain"});
         response.write("That warrant does not verify!");
         response.end();
         return;
     }
+    console.log("XXXX" + JSON.stringify(reqObj));
+    var evaluator = getEvaluator(
+        reqObj.signedGameState.gameState.gameHeader.evaluator);
+    var state;
+    try {
+        state = evaluator(MyCrypto, reqObj.signedGameState);
+    } catch (e) {
+        response.writeHead(400, {"Content-Type":"text/plain"});
+        response.write("Evaluator error:");
+        response.write(e.message + "\n");
+        response.write(e.stack);
+        response.end();
+        return;
+    }
+    if (!state.payout) {
+        response.writeHead(400, {"Content-Type":"text/plain"});
+        response.write("Nonterminal gamestate:");
+        response.write(JSON.stringify(state));
+    }
     response.writeHead(200, {"Content-Type":"text/plain"});
-    response.write("That warrant looks good.");
+    response.write("Looks good: TODO, payout: " + state.payout);
     response.end();
 };
 
