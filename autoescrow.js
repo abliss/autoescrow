@@ -4,16 +4,20 @@ var Sys = require('sys');
 var Url = require('url');
 var MyCrypto = require('./my_crypto.js');
 
-// the servers keys, which will either be generated or read from disk on startup.
+// the servers keys, which will either be generated or read from disk on startup
 var privKey;
 var pubKey;
+
+// whitelist of evaluators we are willing to execute
+var whitelist = {};
+whitelist["07f6ad119602c0ad132b3a9085a22d933fdd32c315c88b1c4de15e22aae582ce9af0abd770e3c532e5cbd698cfbafde2ad60aed2ed4f9001ff2e193162b69680"] = "2p rock paper scissors";
 
 if (process.argv.length > 2) {
     if (process.argv[2] === "genkey") {
         console.log("Generating new keypair.");
         var kp = require('./nacl.js').crypto_sign_keypair();
-        Fs.writeFileSync("server-priv.bin", new Buffer(kp.signSk));
-        Fs.writeFileSync("server-pub.bin", new Buffer(kp.signPk));
+        Fs.writeFile("server-priv.bin", new Buffer(kp.signSk));
+        Fs.writeFile("server-pub.bin", new Buffer(kp.signPk));
         privKey = kp.signSk;
         pubKey = kp.signPk;
     }
@@ -31,11 +35,11 @@ console.log("pubkey: " + new Buffer(pubKey).toString('hex'));
 
 function save(blob) {
     var blobHash = MyCrypto.hash(blob);
-    Fs.writeFileSync('sha512/' + blobHash, blob);
+    Fs.writeFile('sha512/' + blobHash, blob);
     return blobHash;
 }
-function signObj(obj) {
-    var blob = JSON.stringify(obj);
+function signObj(obj, schema) {
+    var blob = MyCrypto.serialize(obj, schema);
     blob = blob.replace(/}\s*/,'');
     var signature = MyCrypto.hexSig(blob, privKey);
     blob += '\n,"naclSig":"' + signature + '"}\n';
@@ -53,7 +57,7 @@ function verifyBlob(blob) {
 }
 
 function getEvaluator(blobHash) {
-    // TODO: check whitelist
+    if (!whitelist[blobHash]) return null;
     return require('./sha512/' + blobHash).evaluator;
 }
 
@@ -76,7 +80,7 @@ postHandlers["/new"] = function(response, body) {
         return;
     }
     // Save request for later reference
-    var gameId = save(body);
+    var gameId = save(MyCrypto.serialize(reqObj, "gameHeader"));
     // make warrant
     var warrant = {
         address: "TODO:" + Math.random(),
@@ -90,15 +94,23 @@ postHandlers["/new"] = function(response, body) {
 };
 postHandlers["/redeem"] = function(response, body) {
     var reqObj = JSON.parse(body);
+    save(body);
     // Exctract and verify the warrant
     // TODO: for now we are relying on the server's canonicalizing json format.
-    if (!verifyBlob(JSON.stringify(reqObj.warrant))) {
+    if (!verifyBlob(MyCrypto.serialize(reqObj.warrant, "warrant"))) {
         response.writeHead(400, {"Content-Type":"text/plain"});
         response.write("That warrant does not verify!");
         response.end();
         return;
     }
-    console.log("XXXX" + JSON.stringify(reqObj));
+    if (MyCrypto.hash(
+            MyCrypto.serialize(
+                reqObj.signedGameState.gameState.gameHeader, "gameHeader")) !==
+        reqObj.warrant.gameId) {
+        response.writeHead(400, {"Content-Type":"text/plain"});
+        response.end();
+        return;
+    }
     var evaluator = getEvaluator(
         reqObj.signedGameState.gameState.gameHeader.evaluator);
     var state;
