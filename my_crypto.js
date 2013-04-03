@@ -4,6 +4,14 @@ if (typeof(window) !== 'undefined') {
 // Wrappers around Nacl. All take regular strings and return hex strings.
 (function(global) {
     var Nacl = (typeof(nacl) === 'undefined') ? require("./nacl.js") : nacl;
+
+    function hex2latin1(hex) {
+        var str = '';
+        for (var i = 0; i < hex.length; i += 2)
+            str += String.fromCharCode(parseInt(hex.substr(i, 2), 16));
+        return str;
+    }
+
     global.hash = function(string) {
         if (typeof string === 'string') {
             return Nacl.to_hex(Nacl.crypto_hash_string(string));
@@ -19,16 +27,14 @@ if (typeof(window) !== 'undefined') {
         return signature;
     };
     global.verify = function(string, hexSig, pub) {
-        var sigBytes = new Buffer(hexSig, 'hex');
-        var blobBuf = new Buffer(string, 'utf8');
-        var pubBuf =  new Buffer(pub, 'hex');
-        var signedMessage = new Buffer(blobBuf.length + 64);
-        var off = 0;
-        off = sigBytes.copy(signedMessage, 0, 0, 32);
-        off += blobBuf.copy(signedMessage, off);
-        off += sigBytes.copy(signedMessage, off, 32);
+        var sigl1 = hex2latin1(hexSig);
+        var publ1 = hex2latin1(pub);
+        // TODO: mixing latin1 and utf8 here?
+        var signedMessage = Nacl.encode_latin1(sigl1.substring(0,32) +
+                                               string + sigl1.substring(32));
 
-        var verified = Nacl.crypto_sign_open(signedMessage, pubBuf);
+        var verified = Nacl.crypto_sign_open(signedMessage,
+                                             Nacl.encpode_latin1(publ1));
         return (verified !== null);
     };
     global.randomHex = function(num) {
