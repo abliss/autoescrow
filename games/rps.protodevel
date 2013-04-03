@@ -39,9 +39,8 @@ message Salt {
     optional bytes random = 2;
 }
 message Turn {
-    // The stake of this game in satoshi.
-    // Present only the first turn.
-    optional uint64 stake = 1;
+    // Index of the player making this turn
+    optional uint32 who = 1;
     // A hash of a secret salt, which will be revealed in this player's next turn.
     optional bytes hash = 2;
     // the Salt corresponding to this player's last hash.
@@ -53,8 +52,8 @@ message Turn {
 }
 
 message GameState {
-    // The hash of a GameHeader object
-    optional bytes gameId = 1;
+    // The GameHeader object
+    optional gameHeader gameHeader = 1;
     // 1 turn object from each player in round-robin.
     repeated Turn turns = 2;
 }
