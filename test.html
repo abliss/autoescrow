@@ -1,0 +1,30 @@
+<!doctype html>
+<html>
+  <head>
+    <title>autoescrow test page</title>
+    <script type='text/javascript'
+            src='https://cdn.firebase.com/v0/firebase.js'>
+    </script>
+  </head>
+  <body>
+    <div id="keyform">
+      <label for="privKey">Private key:</label>
+      <input id="privKey"></input><br/>
+      <label for="pubKey">Public key:</label>
+      <input id="pubKey"></input><br/>
+      <input type="button" id="genKey" value="Generate"/>
+    </div>
+    <hr/>
+    <input id="announce" type="button" value="Announce" disabled="true"/>
+    <label id="announceLabel" for="announce">You need keys before you can announce yourself.</label> 
+    <pre id="output">
+      Loading...
+</pre>
+    <script type='text/javascript' src='nacl_browser.js'>
+    </script>
+    <script type='text/javascript' src='my_crypto.js'>
+    </script>
+    <script type='text/javascript' src='test_browser.js'>
+    </script>
+  </body>
+</html>
