@@ -62,19 +62,20 @@ function getEvaluator(blobHash) {
 }
 
 var postHandlers = {};
-postHandlers["/new"] = function(response, body) {
+postHandlers["/new"] = function(response, body, headers) {
+    headers["Content-Type"] ="text/plain";
     var reqObj = JSON.parse(body);
     // Check for minimum rake
     if (!(reqObj.rake > 0)) {
-        response.writeHead(403, "Escrow Declined");
-        response.write("Rake must exceed 0\r\n\r\n");
+        response.writeHead(403, headers);
+        response.write("Declined. Rake must exceed 0\r\n\r\n");
         response.end();
         return;
     }
     // Check for an acceptable evaluator
     if (!getEvaluator(reqObj.evaluator)) {
-        response.writeHead(403, "Escrow Declined");
-        response.write("Evaluator " + reqObj.evaluator +
+        response.writeHead(403, headers);
+        response.write("Declined. Evaluator " + reqObj.evaluator +
                        "unnaceptable.\r\n\r\n");
         response.end();
         return;
@@ -88,17 +89,19 @@ postHandlers["/new"] = function(response, body) {
     };
     var signedWarrant = signObj(warrant);
     save(signedWarrant);
-    response.writeHead(200, {"Content-Type":"application/json"});
+    headers["Content-Type"] ="application/json";
+    response.writeHead(200, headers);
     response.write(signedWarrant);
     response.end();
 };
-postHandlers["/redeem"] = function(response, body) {
+postHandlers["/redeem"] = function(response, body, headers) {
+    headers["Content-Type"] ="text/plain";
     var reqObj = JSON.parse(body);
     save(body);
     // Exctract and verify the warrant
     // TODO: for now we are relying on the server's canonicalizing json format.
     if (!verifyBlob(MyCrypto.serialize(reqObj.warrant, "warrant"))) {
-        response.writeHead(400, {"Content-Type":"text/plain"});
+        response.writeHead(400, headers);
         response.write("That warrant does not verify!");
         response.end();
         return;
@@ -107,7 +110,7 @@ postHandlers["/redeem"] = function(response, body) {
             MyCrypto.serialize(
                 reqObj.signedGameState.gameState.gameHeader, "gameHeader")) !==
         reqObj.warrant.gameId) {
-        response.writeHead(400, {"Content-Type":"text/plain"});
+        response.writeHead(400, headers);
         response.end();
         return;
     }
@@ -117,7 +120,7 @@ postHandlers["/redeem"] = function(response, body) {
     try {
         state = evaluator(MyCrypto, reqObj.signedGameState);
     } catch (e) {
-        response.writeHead(400, {"Content-Type":"text/plain"});
+        response.writeHead(400, headers);
         response.write("Evaluator error:");
         response.write(e.message + "\n");
         response.write(e.stack);
@@ -125,17 +128,25 @@ postHandlers["/redeem"] = function(response, body) {
         return;
     }
     if (!state.payout) {
-        response.writeHead(400, {"Content-Type":"text/plain"});
+        response.writeHead(400, headers);
         response.write("Nonterminal gamestate:");
         response.write(JSON.stringify(state));
     }
-    response.writeHead(200, {"Content-Type":"text/plain"});
+    response.writeHead(200, headers);
     response.write("Looks good: TODO, payout: " + state.payout);
     response.end();
 };
 
 function postRequestHandler(request, response) {
     if (request.method !== 'POST') return;
+    var headers = {};
+    headers["Access-Control-Allow-Origin"] = "*";
+    //headers["Access-Control-Allow-Origin"] = req.headers.origin;
+    headers["Access-Control-Allow-Methods"] = "GET,POST,OPTIONS";
+    headers["Access-Control-Allow-Credentials"] = false;
+    headers["Access-Control-Max-Age"] = '86400'; // 24 hours
+    headers["Access-Control-Allow-Headers"] = "X-Requested-With,X-HTTP-Method-Override,Content-Type,Accept";
+
     var path = Url.parse(request.url).path;
     console.log("POST " + path);
     var handler = postHandlers[path];
@@ -146,34 +157,46 @@ function postRequestHandler(request, response) {
                        body += chunk;
                        if (body.length > 1e6) {
                            queryData = "";
-                           response.writeHead(413, {'Content-Type': 'text/plain'});
+                           headers["Content-Type"] ="text/plain";
+                           response.writeHead(413, headers);
                            request.connection.destroy();
                        }
                    });
         request.on('end', function() {
                        try {
-                           handler(response, body);
+                           handler(response, body, headers);
                        } catch (e) {
                            console.log(e.stack);
-                           response.writeHead(500, {"Content-Type":"text/plain"});
+                           headers["Content-Type"] ="text/plain";
+                           response.writeHead(500, headers);
                            response.write(e.stack);
                            response.write("\r\n\r\n");
                            response.end();
                        }
                    });
     } else {
-        response.writeHead(404, "Not Found");
+        headers["Content-Type"] ="text/plain";
+        response.writeHead(404, headers);
         response.end();
     }
 }
 
 function getRequestHandler(request, response) {
     if (request.method !== 'GET') return;
+    var headers = {};
+    headers["Access-Control-Allow-Origin"] = "*";
+    //headers["Access-Control-Allow-Origin"] = req.headers.origin;
+    headers["Access-Control-Allow-Methods"] = "GET,POST,OPTIONS";
+    headers["Access-Control-Allow-Credentials"] = false;
+    headers["Access-Control-Max-Age"] = '86400'; // 24 hours
+    headers["Access-Control-Allow-Headers"] = "X-Requested-With,X-HTTP-Method-Override,Content-Type,Accept";
+            headers["Content-Type"] ="text/plain";
     var path = Url.parse(request.url).path;
     console.log("GET " + path);
     try {
         if (path.match(/^\/sha5121\/[0-9a-f]{32}./)) {
-            response.writeHead(200, {"Content-Type":"application/octet-stream"});
+            headers["Content-Type"] ="application/octet-stream";
+            response.writeHead(200, headers);
             var stream = Fs.createReadStream(path);
             stream.on("error", function(e) {
                           response.writeHead(404, "Not Found");
@@ -184,12 +207,14 @@ function getRequestHandler(request, response) {
             stream.pipe(response);
             return;
         } else if (path === '/pubKey') {
-            response.writeHead(200, {"Content-Type":"application/octet-stream"});
+            headers["Content-Type"] ="application/octet-stream";
+            response.writeHead(200, headers);
             response.write(pubKey);
             response.end();
             return;
         } else {
-            response.writeHead(404, "Not Found");
+            headers["Content-Type"] ="text/plain";
+            response.writeHead(404, Headers);
             response.write("Not found.\r\n\r\n");
             response.end();
             return;
@@ -197,7 +222,8 @@ function getRequestHandler(request, response) {
         return;
     } catch (e) {
         console.log(e.stack);
-        response.writeHead(500, "Error");
+        headers["Content-Type"] ="text/plain";
+        response.writeHead(500, headers);
         response.write(e.stack);
         response.end();
     }
