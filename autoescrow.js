@@ -88,7 +88,9 @@ postHandlers["/new"] = function(response, body, headers) {
         gameId: gameId
     };
     var signedWarrant = signObj(warrant);
-    save(signedWarrant);
+    var warrantId = save(signedWarrant);
+    console.log("Issued warrant for sha512/" + gameId.substring(0,6)
+                + " in sha512/" + warrantId.substring(0,6));
     headers["Content-Type"] ="application/json";
     response.writeHead(200, headers);
     response.write(signedWarrant);
@@ -214,7 +216,7 @@ function getRequestHandler(request, response) {
             return;
         } else {
             headers["Content-Type"] ="text/plain";
-            response.writeHead(404, Headers);
+            response.writeHead(404, headers);
             response.write("Not found.\r\n\r\n");
             response.end();
             return;
