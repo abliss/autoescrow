@@ -52,7 +52,7 @@ function getWarrant(cont) {
             cont(warrant);
         });
     });
-    req.write(JSON.stringify(gameHeader));
+    req.write(MyCrypto.serialize(gameHeader, "gameHeader"));
     req.end();
 }
 
@@ -75,7 +75,6 @@ function redeem(signedGameState, warrant) {
     req.end();
 
 }
-
 
 
 

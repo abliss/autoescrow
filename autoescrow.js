@@ -203,6 +203,24 @@ function getRequestHandler(request, response) {
     }
 }
 
+// for allowing cross-origin requests
+function optionsRequestHandler(req, res) {
+    if (req.method === 'OPTIONS') {
+        console.log('!OPTIONS');
+        var headers = {};
+        // IE8 does not allow domains to be specified, just the *
+        headers["Access-Control-Allow-Origin"] = "*";
+        //headers["Access-Control-Allow-Origin"] = req.headers.origin;
+        headers["Access-Control-Allow-Methods"] = "GET,POST,OPTIONS";
+        headers["Access-Control-Allow-Credentials"] = false;
+        headers["Access-Control-Max-Age"] = '86400'; // 24 hours
+        headers["Access-Control-Allow-Headers"] = "X-Requested-With,X-HTTP-Method-Override,Content-Type,Accept";
+        headers["Content-type"] = "text/html";
+        res.writeHead(200, headers);
+        res.end();
+    }
+}
+
 function getByHashSync(blobHash) {
     return Fs.readFileSync("sha512/" + blobHash).toString();
 }
@@ -211,4 +229,5 @@ var server = Http.createServer();
 server.listen(8888);
 server.addListener('request', postRequestHandler);
 server.addListener('request', getRequestHandler);
+server.addListener('request', optionsRequestHandler);
 Sys.puts("Listening on port 8888.");
