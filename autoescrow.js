@@ -46,22 +46,6 @@ function signObj(obj, schema) {
     signed.signature = signature;
     return MyCrypto.serialize(signed, "signed_" + schema);
 }
-function verifyBlob(blob, schema) {
-    var obj = JSON.parse(blob);
-    var sigHex = obj.signature;
-    if (!sigHex) {
-        throw new Error("no signature in " + JSON.stringify(obj));
-    }
-    var signedMessage = MyCrypto.serialize(obj[schema], schema);
-    if (!signedMessage) {
-        throw new Error("no " + schema + " in " + JSON.stringify(obj));
-    }
-    var verified = MyCrypto.verify(signedMessage, sigHex, pubKey.toString('hex'));
-    if (!verified) {
-        return null;
-    }
-    return JSON.parse(verified);
-}
 
 function getEvaluator(blobHash) {
     //if (!whitelist[blobHash]) return null;
@@ -119,8 +103,7 @@ postHandlers["/redeem"] = function(response, body, headers) {
     }
     // Exctract and verify the warrant
     // TODO: for now we are relying on the server's canonicalizing json format.
-    if (!verifyBlob(MyCrypto.serialize(reqObj.signedWarrant, "signed_warrant"),
-                    "warrant")) {
+    if (!MyCrypto.verifySignedObj(reqObj.signedWarrant, "warrant", pubKey)) {
         response.writeHead(400, headers);
         response.write("That warrant does not verify!");
         response.end();
@@ -153,7 +136,7 @@ postHandlers["/redeem"] = function(response, body, headers) {
         response.write(JSON.stringify(state));
     }
     response.writeHead(200, headers);
-    response.write("Looks good: TODO, payout: " + state.payout);
+    response.write("Looks good: TODO, payout: " + state.payout + " from " + reqObj.signedWarrant.warrant.address);
     response.end();
 };
 

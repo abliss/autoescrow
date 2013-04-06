@@ -149,6 +149,9 @@ function childAdded(snapshot) {
         if (obj.signedGameState) {
             gameHeader = obj.signedGameState.gameState.gameHeader;
             gameId = MyCrypto.hash(MyCrypto.serialize(gameHeader, 'GameHeader'));
+            if (!obj.signedGameState.gameState.turns) {
+                obj.signedGameState.gameState.turns = []; // XXX firebase bug?!
+            }
         }
         if (obj.type == 'announce') {
             message += " announced. ";
@@ -191,6 +194,7 @@ function childAdded(snapshot) {
                 log(result);
             } catch (e) {
                 log(e);
+                log(obj.signedGameState);
             }
         } else {
             log("Unknown message received: " + JSON.stringify(obj));
@@ -234,25 +238,25 @@ function propose(msgObj) {
     log("sent request to " + escrowServer());
 }
 
-function handleWarrant(gameHeader, warrantBlob) {
+function handleWarrant(gameHeader, signedWarrantBlob) {
     try {
         var gameState = {gameHeader: gameHeader, turns: []};
         var sgs = {gameState:gameState, signatures:[]};
         sgs.signatures[0] = MyCrypto.hexSig(
             MyCrypto.serialize(gameHeader, 'GameHeader'), myPrivKey);
-        var warrant = verifyBlob(warrantBlob, servKeyHex);
-        var warrantId  = MyCrypto.hash(
-            MyCrypto.serialize(warrant, 'Warrant'));
+        var signedWarrant = JSON.parse(signedWarrantBlob);
+        var warrant = MyCrypto.verifySignedObj(signedWarrant, "warrant", servKeyHex);
+        var warrantId  = MyCrypto.hash(MyCrypto.serialize(signedWarrant, "signed_Warrant"));
         if (warrant) {
             log("got valid warrant: " + abbrev(warrantId));
         } else {
-            log("got invalid warrant: " + warrantBlob);
+            log("got invalid warrant: " + signedWarrantBlob);
             return;
         }
         push({
             type:'propose',
             signedGameState: sgs,
-            warrant: warrant
+            signedWarrant: signedWarrant
         });
     } catch (e) {
         log(e);
@@ -276,22 +280,28 @@ function verifyBlob(blob, pubKeyHex) {
 function accept(msgObj) {
     var gameHeader = msgObj.signedGameState.gameState.gameHeader;
     var gameId = MyCrypto.hash(MyCrypto.serialize(gameHeader, 'GameHeader'));
-    var warrant = msgObj.warrant;
-    var warrantBlob = MyCrypto.serialize(warrant, 'Warrant');
-    warrant = verifyBlob(warrantBlob, servKeyHex);
-    var warrantId  = MyCrypto.hash(warrantBlob);
-    if (!warrant || warrant.gameId !== gameId) {
-        log("Bad warrant: " + JSON.stringify(msgObj.warrant));
+    var warrant = MyCrypto.verifySignedObj(msgObj.signedWarrant, "warrant", servKeyHex);
+    if (!warrant) {
+        log("Bad warrant: " + JSON.stringify(msgObj.signedWarrant));
         return;
     }
+    if ((warrant.gameId !== gameId)) {
+        log("Wrong warrant " + JSON.stringify(warrant));
+        log("inside " + JSON.stringify(msgObj.signedWarrant));
+        log("Game was: " + MyCrypto.serialize(gameHeader, "GameHeader"));
+        log("wanted gameId=" + gameId );
+        return;
+    }
+    var warrantId  = MyCrypto.hash(MyCrypto.serialize(msgObj.signedWarrant, 'signed_warrant'));
     log("got valid warrant: " + abbrev(warrantId));
     msgObj.signedGameState.signatures[1] = MyCrypto.hexSig(
         MyCrypto.serialize(gameHeader,"GameHeader"), myPrivKey);
     push({
         type:'turn',
         signedGameState: msgObj.signedGameState,
-        warrant: msgObj.warrant
+        signedWarrant: msgObj.signedWarrant
     });
+    log("XXXX pushed :" + msgObj.signedGameState.gameState.turns);
 }
 
 function makeTurn(msgObj, turnObj) {
@@ -305,7 +315,7 @@ function makeTurn(msgObj, turnObj) {
     push({
         type:'turn',
         signedGameState: sgs,
-        warrant: msgObj.warrant
+        signedWarrant: msgObj.signedWarrant
     });
 }
 
@@ -330,7 +340,7 @@ function play(msgObj) {
 
 function redeem(msgObj) {
     var redemption = {
-        warrant:msgObj.warrant,
+        signedWarrant:msgObj.signedWarrant,
         signedGameState:msgObj.signedGameState
     };
     var client = newXHR();

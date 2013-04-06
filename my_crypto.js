@@ -35,7 +35,7 @@ if (typeof(window) !== 'undefined') {
 
         var verified = Nacl.crypto_sign_open(signedMessage,
                                              Nacl.encode_latin1(publ1));
-        return (verified !== null);
+        return Nacl.decode_utf8(verified);
     };
     global.randomHex = function(num) {
         return Nacl.to_hex(Nacl.random_bytes(num));
@@ -55,5 +55,22 @@ if (typeof(window) !== 'undefined') {
     global.deserialize = function(blob) {
         return JSON.parse(blob);
     }
+    
+    global.verifySignedObj = function(obj, innerSchema, pubKey) {
+        var sigHex = obj.signature;
+        if (!sigHex) {
+            throw new Error("no signature in " + JSON.stringify(obj));
+        }
+        var signedMessage = global.serialize(obj[innerSchema], innerSchema);
+        if (!signedMessage) {
+            throw new Error("no " + innerSchema + " in " + JSON.stringify(obj));
+        }
+        var verified = global.verify(signedMessage, sigHex, pubKey.toString('hex'));
+        if (!verified) {
+            return null;
+        }
+        return JSON.parse(verified);
+    }
+
     return global;
 })((typeof(window) !== 'undefined') ? MyCrypto : this);
