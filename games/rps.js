@@ -127,7 +127,7 @@ function EvaluatorBuilder(numPlayers) {
                     state.nextPlayer = (state.nextPlayer + 1) % numPlayers;
             });
         }
-        // collect one salt from each player, verify their spuds
+        // collect one salt from each player, verify their choices
         for (i = 0; i < numPlayers; i++) {
             this.addVisitor(checkWhoVisitor());
             this.addVisitor(
@@ -141,11 +141,11 @@ function EvaluatorBuilder(numPlayers) {
                         throw new Error("hash mismatch! expected " + oldHash +
                                         " got " + newHash);
                     }
-                    if (!((salt.spud >= 0) && (salt.spud < max))) {
-                        throw new Error("Spud out of bounds! wanted " +
-                                        salt.spud + "<" + max);
+                    if (!((salt.choice >= 0) && (salt.choice < max))) {
+                        throw new Error("Choice out of bounds! wanted " +
+                                        salt.choice + "<" + max);
                     }
-                    state.choices[state.nextPlayer] = salt.spud;
+                    state.choices[state.nextPlayer] = salt.choice;
                     state.nextPlayer = (state.nextPlayer + 1 < numPlayers) ?
                         (state.nextPlayer + 1) : whoNext;
                 });
@@ -154,7 +154,7 @@ function EvaluatorBuilder(numPlayers) {
     };
 
     // extracts a public choice from the named current player in [0..n-1].
-    // leaves the answer in state.spud.
+    // leaves the answer in state.choice.
     this.choice = function(playerNum, max, whoNext) {
         this.addVisitor(
             function(turns, state, crypto) {
@@ -185,10 +185,10 @@ function EvaluatorBuilder(numPlayers) {
                 visitors.forEach(function(v) { v(turns, state, crypto); n++;});
             } catch (e) {
                 if (e !== turns.wasDepleted()) {
-                    e.message += "\nturn: " +
+                    e.message += "-- turn: " +
                         (signedGameState.gameState.turns.length -
                          turns.size() - 1);
-                    e.message += "\nvisitor: " + n;
+                    e.message += ", visitor: " + n;
                     throw e;
                 }
             }

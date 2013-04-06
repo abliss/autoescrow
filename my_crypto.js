@@ -42,7 +42,15 @@ if (typeof(window) !== 'undefined') {
     }
     // TODO: should be a protobuffer maybe?
     global.serialize = function(obj) {
-        return JSON.stringify(obj);
+        var keys = [];
+        for (var k in obj) if (obj.hasOwnProperty(k)) {
+            keys.push(k);
+        }
+        var newObj = {};
+        keys.sort().forEach(function(k) {
+            newObj[k] = obj[k];
+        });
+        return JSON.stringify(newObj);
     }
     global.deserialize = function(blob) {
         return JSON.parse(blob);

@@ -40,24 +40,31 @@ function save(blob) {
 }
 function signObj(obj, schema) {
     var blob = MyCrypto.serialize(obj, schema);
-    blob = blob.replace(/}\s*/,'');
     var signature = MyCrypto.hexSig(blob, privKey);
-    blob += '\n,"naclSig":"' + signature + '"}\n';
-    return blob;
+    var signed = {};
+    signed[schema] = obj;
+    signed.signature = signature;
+    return MyCrypto.serialize(signed, "signed_" + schema);
 }
-function verifyBlob(blob) {
-    var sigHex = JSON.parse(blob).naclSig;
-    blob = blob.replace(/\s*,"naclSig":"[0-9a-f]+"}\s*$/,'');
-    var verified = MyCrypto.verify(blob, sigHex, pubKey.toString('hex'));
+function verifyBlob(blob, schema) {
+    var obj = JSON.parse(blob);
+    var sigHex = obj.signature;
+    if (!sigHex) {
+        throw new Error("no signature in " + JSON.stringify(obj));
+    }
+    var signedMessage = MyCrypto.serialize(obj[schema], schema);
+    if (!signedMessage) {
+        throw new Error("no " + schema + " in " + JSON.stringify(obj));
+    }
+    var verified = MyCrypto.verify(signedMessage, sigHex, pubKey.toString('hex'));
     if (!verified) {
         return null;
     }
-    var obj = JSON.parse(blob + "}");
-    return obj;
+    return JSON.parse(verified);
 }
 
 function getEvaluator(blobHash) {
-    if (!whitelist[blobHash]) return null;
+    //if (!whitelist[blobHash]) return null;
     return require('./sha512/' + blobHash).evaluator;
 }
 
@@ -68,6 +75,8 @@ postHandlers["/new"] = function(response, body, headers) {
     // Check for minimum rake
     if (!(reqObj.rake > 0)) {
         response.writeHead(403, headers);
+        var msg = "Declined. Rake must exceed 0\r\n\r\n";
+        console.log(msg);
         response.write("Declined. Rake must exceed 0\r\n\r\n");
         response.end();
         return;
@@ -75,19 +84,21 @@ postHandlers["/new"] = function(response, body, headers) {
     // Check for an acceptable evaluator
     if (!getEvaluator(reqObj.evaluator)) {
         response.writeHead(403, headers);
-        response.write("Declined. Evaluator " + reqObj.evaluator +
-                       "unnaceptable.\r\n\r\n");
+        var msg = "Declined. Evaluator " + reqObj.evaluator +
+            "unnaceptable.\r\n\r\n";
+        console.log(msg);
+        response.write(msg);
         response.end();
         return;
     }
     // Save request for later reference
-    var gameId = save(MyCrypto.serialize(reqObj, "gameHeader"));
+    var gameId = save(MyCrypto.serialize(reqObj, "GameHeader"));
     // make warrant
     var warrant = {
         address: "TODO:" + Math.random(),
         gameId: gameId
     };
-    var signedWarrant = signObj(warrant);
+    var signedWarrant = signObj(warrant, "warrant");
     var warrantId = save(signedWarrant);
     console.log("Issued warrant for sha512/" + gameId.substring(0,6)
                 + " in sha512/" + warrantId.substring(0,6));
@@ -100,9 +111,16 @@ postHandlers["/redeem"] = function(response, body, headers) {
     headers["Content-Type"] ="text/plain";
     var reqObj = JSON.parse(body);
     save(body);
+    if (!reqObj.signedWarrant || !reqObj.signedGameState) {
+        response.writeHead(400, headers);
+        response.write("Need a signedWarrant and a signedGameState to redeem.");
+        response.end();
+        return;
+    }
     // Exctract and verify the warrant
     // TODO: for now we are relying on the server's canonicalizing json format.
-    if (!verifyBlob(MyCrypto.serialize(reqObj.warrant, "warrant"))) {
+    if (!verifyBlob(MyCrypto.serialize(reqObj.signedWarrant, "signed_warrant"),
+                    "warrant")) {
         response.writeHead(400, headers);
         response.write("That warrant does not verify!");
         response.end();
@@ -111,7 +129,7 @@ postHandlers["/redeem"] = function(response, body, headers) {
     if (MyCrypto.hash(
             MyCrypto.serialize(
                 reqObj.signedGameState.gameState.gameHeader, "gameHeader")) !==
-        reqObj.warrant.gameId) {
+        reqObj.signedWarrant.warrant.gameId) {
         response.writeHead(400, headers);
         response.end();
         return;
@@ -153,7 +171,6 @@ function postRequestHandler(request, response) {
     console.log("POST " + path);
     var handler = postHandlers[path];
     if (handler) {
-        // New warrant.
         var body = '';
         request.on('data', function(chunk) {
                        body += chunk;
