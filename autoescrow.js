@@ -10,7 +10,7 @@ var pubKey;
 
 // whitelist of evaluators we are willing to execute
 var whitelist = {};
-whitelist["07f6ad119602c0ad132b3a9085a22d933fdd32c315c88b1c4de15e22aae582ce9af0abd770e3c532e5cbd698cfbafde2ad60aed2ed4f9001ff2e193162b69680"] = "2p rock paper scissors";
+whitelist["07f6ad119602c0ad132b3a9085a22d933fdd32c315c88b1c4de15e22aae582ce9af0abd770e3c532e5cbd698cfbafde2ad60aed2ed4f9001ff2e193162b69680"] = "2p rock paper scissors v0.1";
 
 if (process.argv.length > 2) {
     if (process.argv[2] === "genkey") {
@@ -48,7 +48,7 @@ function signObj(obj, schema) {
 function verifyBlob(blob) {
     var sigHex = JSON.parse(blob).naclSig;
     blob = blob.replace(/\s*,"naclSig":"[0-9a-f]+"}\s*$/,'');
-    var verified = MyCrypto.verify(blob, sigHex, pubKey);
+    var verified = MyCrypto.verify(blob, sigHex, pubKey.toString('hex'));
     if (!verified) {
         return null;
     }
@@ -209,9 +209,9 @@ function getRequestHandler(request, response) {
             stream.pipe(response);
             return;
         } else if (path === '/pubKey') {
-            headers["Content-Type"] ="application/octet-stream";
+            headers["Content-Type"] ="text/plain";
             response.writeHead(200, headers);
-            response.write(pubKey);
+            response.write(pubKey.toString('hex'));
             response.end();
             return;
         } else {

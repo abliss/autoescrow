@@ -30,6 +30,10 @@ function checkSignatures(crypto, signedGameState) {
 
 function TurnStack(origTurns) {
     var turns = origTurns.slice();
+    // depleted basically indicates that the turn chain being analyzed is valid,
+    // but not terminal: the game is still in progress.  TODO: this paradigm
+    // usses Error catching as part of a nonexceptional code flow, which is to
+    // be avoided.
     var depleted = undefined;
 
     this.peek = function() {
@@ -101,12 +105,12 @@ function EvaluatorBuilder(numPlayers) {
     }
 
     // extracts a simultaneous choice from each player in the range
-    // [0... bound-1]. leaves the result in state.choices.
+    // [0... max-1]. leaves the result in state.choices.
     // whoNext: the next player to play after the choice.
     // This works by first extracting a hash from each player which commits
     // them to a secret choice, then forcing each player to reveal the secret,
     // and verifying the hash.
-    this.simulChoice = function(bound, whoNext) {
+    this.simulChoice = function(max, whoNext) {
         // collect one hash from each player
         this.addVisitor(function(turns, state) {
             state.simulChoiceQueue = [];
@@ -137,9 +141,9 @@ function EvaluatorBuilder(numPlayers) {
                         throw new Error("hash mismatch! expected " + oldHash +
                                         " got " + newHash);
                     }
-                    if (!((salt.spud >= 0) && (salt.spud < bound))) {
+                    if (!((salt.spud >= 0) && (salt.spud < max))) {
                         throw new Error("Spud out of bounds! wanted " +
-                                        salt.spud + "<" + bound);
+                                        salt.spud + "<" + max);
                     }
                     state.choices[state.nextPlayer] = salt.spud;
                     state.nextPlayer = (state.nextPlayer + 1 < numPlayers) ?
@@ -151,7 +155,7 @@ function EvaluatorBuilder(numPlayers) {
 
     // extracts a public choice from the named current player in [0..n-1].
     // leaves the answer in state.spud.
-    this.choice = function(playerNum, bound, whoNext) {
+    this.choice = function(playerNum, max, whoNext) {
         this.addVisitor(
             function(turns, state, crypto) {
                 state.nextPlayer = playerNum;
@@ -160,9 +164,9 @@ function EvaluatorBuilder(numPlayers) {
                     throw new Error("Wrong who! wanted " + playerNum +
                                     "got  " + turn.who);
                 }
-                if (!((turn.choice >= 0) && (turn.choice < bound))) {
+                if (!((turn.choice >= 0) && (turn.choice < max))) {
                     throw new Error("Bad choice! wanted " + turn.choice + " <" +
-                                    bound);
+                                    max);
                 }
                 state.choice = turn.choice;
                 state.nextPlayer = whoNext;

@@ -1,21 +1,24 @@
-<!doctype html>
+
 <html>
   <head>
     <title>autoescrow test page</title>
-    <script type='text/javascript'
-            src='https://cdn.firebase.com/v0/firebase.js'>
+<!--            src='https://cdn.firebase.com/v0/firebase.js'-->
+    <script type='text/javascript' src='firebase.js'>
     </script>
   </head>
   <body>
     Note: this is only a protocol test. None of this is secure yet.<br/>
     <div id="form">
-      <label for="server">Autoescrow server:</label>
+      <label for="server">Server:</label>
       <input id="server" value="http://localhost:8888"/><br/>
+      <label for="servKey">Server key:</label>
+      <input id="servKey"/> <input id="getServKey" type="button" value='fetch'/> <br/>
       <label for="privKey">Private key:</label>
       <input id="privKey"/><br/>
       <label for="pubKey">Public key:</label>
-      <input id="pubKey"/><br/>
+      <input id="pubKey"/>
       <input type="button" id="genKey" value="Generate"/>
+      <span id="oldKeys"/>
     </div>
     <hr/>
     <input id="announce" type="button" value="Announce" disabled="true"/>

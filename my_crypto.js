@@ -26,15 +26,15 @@ if (typeof(window) !== 'undefined') {
             Nacl.to_hex(signedMessage.subarray(signedMessage.length - 32));
         return signature;
     };
-    global.verify = function(string, hexSig, pub) {
+    global.verify = function(string, hexSig, pubHex) {
         var sigl1 = hex2latin1(hexSig);
-        var publ1 = hex2latin1(pub);
+        var publ1 = hex2latin1(pubHex);
         // TODO: mixing latin1 and utf8 here?
         var signedMessage = Nacl.encode_latin1(sigl1.substring(0,32) +
                                                string + sigl1.substring(32));
 
         var verified = Nacl.crypto_sign_open(signedMessage,
-                                             Nacl.encpode_latin1(publ1));
+                                             Nacl.encode_latin1(publ1));
         return (verified !== null);
     };
     global.randomHex = function(num) {

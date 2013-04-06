@@ -20,6 +20,9 @@ message GameHeader {
     optional uint32 blockLimit = 5;
     // To uniquify this game
     optional uint32 nonce = 6;
+    // Amount each player will pay into the pot before the game begins, in satoshi
+    // TODO: this will move once in-game betting is supported
+    optional uint32 ante = 7;
 }
 
 
