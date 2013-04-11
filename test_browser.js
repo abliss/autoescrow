@@ -89,7 +89,6 @@ function genKey() {
         document.getElementById('pubKey').value = pubHex;
         updateKeys();
     }
-    setKeys();
 
     var aNode = document.createElement("a");
     aNode.href = "#key=" + pubHex;
@@ -97,6 +96,9 @@ function genKey() {
     aNode.innerHTML = abbrev(pubHex);
     document.getElementById('oldKeys').appendChild(aNode);
     document.getElementById('oldKeys').appendChild(document.createTextNode(" "));
+
+    setKeys();
+
     announce();
 };
 function announce() {
@@ -108,7 +110,11 @@ document.getElementById('genKey').onclick = genKey;
 document.getElementById('announce').onclick = announce;
 
 function abbrev(hex) {
-    return hex.toString().substring(0,6) + "...";
+    if (hex === nacl.to_hex(myPubKey)) {
+        return "ME";
+    } else {
+        return hex.toString().substring(0,6) + "\u2026";
+    }
 }
 function addAction(name, callback, obj) {
     var aNode = document.createElement("a");
@@ -129,8 +135,8 @@ function addAction(name, callback, obj) {
 
 }
 function checkMe(me) {
-    //XXX return me;
-    return true;
+    return me;
+    //return true;
 }
 function childAdded(snapshot) {
     try {
@@ -188,10 +194,13 @@ function childAdded(snapshot) {
                     var me = (gameHeader.players[result.nextPlayer].key
                               == nacl.to_hex(myPubKey));
                     if (checkMe(me)) {
-                        addAction("play", play, obj);
+                        addAction("add to this game", play, obj);
                     }
                 }
-                log(result);
+                log("   result: " + JSON.stringify(result));
+                if (result.nextPlayer >= 0) {
+                    log("   next to play is " + abbrev(gameHeader.players[result.nextPlayer].key));
+                }
             } catch (e) {
                 log(e);
                 log(obj.signedGameState);
@@ -301,7 +310,6 @@ function accept(msgObj) {
         signedGameState: msgObj.signedGameState,
         signedWarrant: msgObj.signedWarrant
     });
-    log("XXXX pushed :" + msgObj.signedGameState.gameState.turns);
 }
 
 function makeTurn(msgObj, turnObj) {
@@ -322,19 +330,24 @@ function makeTurn(msgObj, turnObj) {
 function play(msgObj) {
     var gameHeader = msgObj.signedGameState.gameState.gameHeader;
     var gameId = MyCrypto.hash(MyCrypto.serialize(gameHeader, 'GameHeader'));
-    var secretStorageKey = nacl.to_hex(myPrivKey) + "/" + gameId;
-    var oldSecret = secrets[secretStorageKey];
-    if (!oldSecret) {
+    var turns = msgObj.signedGameState.gameState.turns;
+
+    if (turns.length < 2) {
         // first turn
         var choice = prompt("Enter 0 for rock, 1 for paper, 2 for scissors.");
         var salt = {choice:choice, random:MyCrypto.randomHex(32)};
         var hash = MyCrypto.hash(MyCrypto.serialize(salt, "Salt"));
-        secrets[secretStorageKey] = {salt:salt};
+        secrets[hash] = {salt:salt};
         makeTurn(msgObj, {hash:hash});
     } else {
         // second turn
-        delete secrets[secretStorageKey];
-        makeTurn(msgObj, {salt:oldSecret.salt});
+        var lastHash = turns[turns.length - 2].hash;
+        var oldSecret = secrets[lastHash];
+        if (!oldSecret) {
+            alert("Secret lost! that game is irretrievable.");
+        } else {
+            makeTurn(msgObj, {salt:oldSecret.salt});
+        }
     }
 }
 

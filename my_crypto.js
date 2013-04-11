@@ -35,6 +35,7 @@ if (typeof(window) !== 'undefined') {
 
         var verified = Nacl.crypto_sign_open(signedMessage,
                                              Nacl.encode_latin1(publ1));
+        if (!verified) throw new Error("Signature didn't verify against pubKey " + pubHex);
         return Nacl.decode_utf8(verified);
     };
     global.randomHex = function(num) {
