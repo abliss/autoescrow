@@ -36,7 +36,7 @@ console.log("pubkey: " + new Buffer(pubKey).toString('hex'));
 
 // ==== Connect to bitcoind
 function connectBitcoin() {
-    var clientOpts = {host:"rapidraven.com", port:8332, user:'autescrow', pass:'passwd'};
+    var clientOpts = {host:"rapidraven.com", port:8332, user:'autescrow', pass:''};
     var conf;
     try {
         conf = Fs.readFileSync(process.env.HOME + '/.bitcoin/bitcoin.conf').toString();
@@ -54,6 +54,19 @@ function connectBitcoin() {
         if (m) clientOpts.port = m[1];
     }
     return new Bitcoin.Client(clientOpts);
+}
+// empty out the balance of this account into the 'rake' account.
+function dropRake(account) {
+    btClient.cmd('getbalance', account, 0, function(err, balance){
+        if (err) {
+            console.log("dropRake fail: " + JSON.stringify(err));
+        } else {
+            btClient.cmd('move', account, 'rake', balance, 0, function(err2, result) {
+                if (err2) console.log(JSON.stringify(err2));
+                if (result) console.log(JSON.stringify(result));
+            });
+        }
+    });
 }
 var btClient = connectBitcoin();
 btClient.cmd('getbalance', '*', 6, function(err, balance){
@@ -81,15 +94,16 @@ function getEvaluator(blobHash) {
 }
 
 var postHandlers = {};
+var minRake = 50000;// BTC .005, should cover transaction fees
 postHandlers["/new"] = function(response, body, headers) {
     headers["Content-Type"] ="text/plain";
     var reqObj = JSON.parse(body);
     // Check for minimum rake
-    if (!(reqObj.rake > 0)) {
+    if (!(reqObj.rake >= minRake)) {
         response.writeHead(403, headers);
-        var msg = "Declined. Rake must exceed 0\r\n\r\n";
+        var msg = "Declined. Rake must be at least " + minRake + "\r\n\r\n";
         console.log(msg);
-        response.write("Declined. Rake must exceed 0\r\n\r\n");
+        response.write(msg);
         response.end();
         return;
     }
@@ -175,7 +189,6 @@ postHandlers["/redeem"] = function(response, body, headers) {
         response.write("Nonterminal gamestate:");
         response.write(JSON.stringify(state));
     }
-    var address = reqObj.signedWarrant.warrant.address;
     var account = "autoescrow-" + reqObj.signedWarrant.warrant.gameId;
     console.log("Paying out redemption " + saved);
     response.writeHead(200, headers);
@@ -186,32 +199,36 @@ postHandlers["/redeem"] = function(response, body, headers) {
             response.end();
         } else {
             response.write("Total 0-balance: " + balance + "\n");
-            // TODO: take rake
-            var payoutsOutstanding = 0;
-            function pay(amt, addr) {
-                payoutsOutstanding++;
-                response.write("Paying " + amt + " to " + addr + "\n");
-                btClient.cmd('sendfrom', account, addr, amt, function(err, txid) {
+            // extract rake. the transaction fee will be paid out of this share.
+            balance -= reqObj.signedGameState.gameState.gameHeader.rake / 10000000;
+            response.write("After rake: " + balance + "\n");
+            if (balance <= 0) {
+                response.write("Insufficient balance in pot! Wait for more antes, then try redeeming again.");
+                response.end();
+            } else {
+                var payments = {};
+                var payoutSum = 0;
+                var minconf = 0;
+                state.payout.forEach(function(s) {payoutSum += s;});
+                for (var i = 0; i < state.payout.length; i++) {
+                    var amountToPay = balance * state.payout[i] / payoutSum;
+                    var addrToPay = reqObj.signedGameState.gameState.gameHeader.players[i].address;
+                    response.write("Paying " + amountToPay + " to " + addrToPay + "\n");
+                    if (amountToPay != 0) {
+                        payments[addrToPay] = amountToPay;
+                    }
+                }
+                btClient.cmd('sendmany', account, payments, minconf, function(err, txid) {
                     if (err) {
-                        response.write("Error paying: " + addr + ": " + JSON.stringify(err) + "\n");
+                        response.write("Error paying: " + JSON.stringify(err) + "\n");
                     } else {
-                        response.write("Paid: " + addr + " with " + txid + "\n");
+                        response.write("Paid. Transaction ID: " + txid + "\n");
+                        dropRake(account);
                     }
-                    payoutsOutstanding--;
-                    if (payoutsOutstanding == 0) {
-                        response.end();
-                    }
+                    response.end();
                 });
             }
-            var payoutSum = 0;
-            state.payout.forEach(function(s) {payoutSum += s;});
-            for (var i = 0; i < state.payout.length; i++) {
-                var amountToPay = balance * state.payout[i] / payoutSum;
-                var addrToPay = reqObj.signedGameState.gameState.gameHeader.players[i].address;
-                pay(amountToPay, addrToPay);
-            }
         }
-        var address = reqObj.signedWarrant.warrant.address
     });
 
 };

@@ -26,7 +26,7 @@ var gameHeader = {
                address: '15d7dDC7AuGiNfso8nsd2mscrmejdBEzDp'},
               {key:keys[1].pub,
                address: '1LkLVSJNj9b85LBsAiYnfTP3TZYLfMmz22'}],
-    rake: 1,
+    rake: 50000, // BTC .001
     nonce: Math.random()
 };
 
