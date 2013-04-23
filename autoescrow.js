@@ -3,15 +3,17 @@ var Http = require('http');
 var Sys = require('sys');
 var Url = require('url');
 var MyCrypto = require('./my_crypto.js');
+var Bitcoin = require('bitcoin');
+
 
 // the servers keys, which will either be generated or read from disk on startup
 var privKey;
 var pubKey;
-
 // whitelist of evaluators we are willing to execute
 var whitelist = {};
 whitelist["07f6ad119602c0ad132b3a9085a22d933fdd32c315c88b1c4de15e22aae582ce9af0abd770e3c532e5cbd698cfbafde2ad60aed2ed4f9001ff2e193162b69680"] = "2p rock paper scissors v0.1";
 
+// ==== Read or generate our keys
 if (process.argv.length > 2) {
     if (process.argv[2] === "genkey") {
         console.log("Generating new keypair.");
@@ -32,6 +34,32 @@ if (process.argv.length > 2) {
 }
 console.log("pubkey: " + new Buffer(pubKey).toString('hex'));
 
+// ==== Connect to bitcoind
+function connectBitcoin() {
+    var clientOpts = {host:"rapidraven.com", port:8332, user:'autescrow', pass:'passwd'};
+    var conf;
+    try {
+        conf = Fs.readFileSync(process.env.HOME + '/.bitcoin/bitcoin.conf').toString();
+    } catch (e) {
+        // no bitcoin.conf
+    }
+    if (conf) {
+        clientOpts.host = "localhost";
+        var m;
+        m = conf.match(/rpcuser=(.*)/);
+        if (m) clientOpts.user = m[1];
+        m = conf.match(/rpcpassword=(.*)/);
+        if (m) clientOpts.pass = m[1];
+        m = conf.match(/rpcport=(.*)/);
+        if (m) clientOpts.port = m[1];
+    }
+    return new Bitcoin.Client(clientOpts);
+}
+var btClient = connectBitcoin();
+btClient.cmd('getbalance', '*', 6, function(err, balance){
+    if (err) console.log(err);
+    console.log('Bitcoin 6-Balance:', balance);
+});
 
 function save(blob) {
     var blobHash = MyCrypto.hash(blob);
@@ -78,23 +106,35 @@ postHandlers["/new"] = function(response, body, headers) {
     // Save request for later reference
     var gameId = save(MyCrypto.serialize(reqObj, "GameHeader"));
     // make warrant
-    var warrant = {
-        address: "TODO:" + Math.random(),
-        gameId: gameId
-    };
-    var signedWarrant = signObj(warrant, "warrant");
-    var warrantId = save(signedWarrant);
-    console.log("Issued warrant for sha512/" + gameId.substring(0,6)
-                + " in sha512/" + warrantId.substring(0,6));
-    headers["Content-Type"] ="application/json";
-    response.writeHead(200, headers);
-    response.write(signedWarrant);
-    response.end();
+    btClient.cmd('getaccountaddress',
+                 'autoescrow-' + gameId,
+                 function(err,address){
+                     if (err) {
+                         console.log(err);
+                         response.writeHead(500, headers);
+                         response.write(JSON.stringify(err));
+                         response.end();
+                     } else {
+                         var warrant = {
+                             address: address,
+                             gameId: gameId
+                         };
+                         var signedWarrant = signObj(warrant, "warrant");
+                         var warrantId = save(signedWarrant);
+                         console.log("Issued warrant for sha512/" + gameId.substring(0,6)
+                                     + " in sha512/" + warrantId.substring(0,6));
+                         headers["Content-Type"] ="application/json";
+                         response.writeHead(200, headers);
+                         response.write(signedWarrant);
+                         response.end();
+                     }
+                 });
+
 };
 postHandlers["/redeem"] = function(response, body, headers) {
     headers["Content-Type"] ="text/plain";
     var reqObj = JSON.parse(body);
-    save(body);
+    var saved = save(body);
     if (!reqObj.signedWarrant || !reqObj.signedGameState) {
         response.writeHead(400, headers);
         response.write("Need a signedWarrant and a signedGameState to redeem.");
@@ -135,9 +175,45 @@ postHandlers["/redeem"] = function(response, body, headers) {
         response.write("Nonterminal gamestate:");
         response.write(JSON.stringify(state));
     }
+    var address = reqObj.signedWarrant.warrant.address;
+    var account = "autoescrow-" + reqObj.signedWarrant.warrant.gameId;
+    console.log("Paying out redemption " + saved);
     response.writeHead(200, headers);
-    response.write("Looks good: TODO, payout: " + state.payout + " from " + reqObj.signedWarrant.warrant.address);
-    response.end();
+    response.write("Looks good: processing payout: " + state.payout + " from " + account + "...\n");
+    btClient.cmd('getbalance', account, 0, function(err, balance){
+        if (err) {
+            response.write("Error getting balance: " + JSON.stringify(err));
+            response.end();
+        } else {
+            response.write("Total 0-balance: " + balance + "\n");
+            // TODO: take rake
+            var payoutsOutstanding = 0;
+            function pay(amt, addr) {
+                payoutsOutstanding++;
+                response.write("Paying " + amt + " to " + addr + "\n");
+                btClient.cmd('sendfrom', account, addr, amt, function(err, txid) {
+                    if (err) {
+                        response.write("Error paying: " + addr + ": " + JSON.stringify(err) + "\n");
+                    } else {
+                        response.write("Paid: " + addr + " with " + txid + "\n");
+                    }
+                    payoutsOutstanding--;
+                    if (payoutsOutstanding == 0) {
+                        response.end();
+                    }
+                });
+            }
+            var payoutSum = 0;
+            state.payout.forEach(function(s) {payoutSum += s;});
+            for (var i = 0; i < state.payout.length; i++) {
+                var amountToPay = balance * state.payout[i] / payoutSum;
+                var addrToPay = reqObj.signedGameState.gameState.gameHeader.players[i].address;
+                pay(amountToPay, addrToPay);
+            }
+        }
+        var address = reqObj.signedWarrant.warrant.address
+    });
+
 };
 
 function postRequestHandler(request, response) {

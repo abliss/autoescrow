@@ -22,8 +22,10 @@ var keys = [
 
 var gameHeader = {
     evaluator: evaluatorHash,
-    players: [{key:keys[0].pub},
-              {key:keys[1].pub}],
+    players: [{key:keys[0].pub,
+               address: '15d7dDC7AuGiNfso8nsd2mscrmejdBEzDp'},
+              {key:keys[1].pub,
+               address: '1LkLVSJNj9b85LBsAiYnfTP3TZYLfMmz22'}],
     rake: 1,
     nonce: Math.random()
 };
@@ -37,19 +39,20 @@ function getWarrant(cont) {
     console.log("Requesting " + JSON.stringify(requestOpts));
     var req = Http.request(requestOpts, function(res) {
         console.log("Got response: " + res.statusCode);
-        if (res.statusCode != 200) {
-            process.exit(res.statusCode);
-        }
         var body = '';
         res.on('data', function(chunk) {
             body += chunk;
         });
         res.on('end', function() {
             console.log(body);
+            if (res.statusCode != 200) {
+                process.exit(res.statusCode);
+            }
             console.log("signedWarrant: " + MyCrypto.hash(body));
             signedWarrant = JSON.parse(body);
             console.log("warrant address: " + signedWarrant.warrant.address);
             cont(signedWarrant);
+
         });
     });
     req.write(MyCrypto.serialize(gameHeader, "gameHeader"));
@@ -62,12 +65,10 @@ function redeem(signedGameState, signedWarrant) {
     console.log("Requesting " + JSON.stringify(requestOpts));
     var req = Http.request(requestOpts, function(res) {
         console.log("Got response: " + res.statusCode);
-        var body = '';
         res.on('data', function(chunk) {
-            body += chunk;
+            console.log(chunk.toString());
         });
         res.on('end', function() {
-            console.log(body);
         });
     });
     var redemption = {signedWarrant: signedWarrant, signedGameState: signedGameState};
