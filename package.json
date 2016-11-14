@@ -1,0 +1,21 @@
+{
+  "name": "autoescrow",
+  "version": "0.0.0",
+  "description": "autoescrow ==========",
+  "main": "autoescrow.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/abliss/autoescrow.git"
+  },
+  "author": "",
+  "license": "GPL",
+  "bugs": {
+    "url": "https://github.com/abliss/autoescrow/issues"
+  },
+  "dependencies": {
+    "bitcoin": "~3.0.1"
+  }
+}

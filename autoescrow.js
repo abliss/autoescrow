@@ -4,7 +4,7 @@ var Sys = require('sys');
 var Url = require('url');
 var MyCrypto = require('./my_crypto.js');
 var Bitcoin = require('bitcoin');
-
+var Crypto = require('crypto');
 
 // the servers keys, which will either be generated or read from disk on startup
 var privKey;
@@ -36,7 +36,7 @@ console.log("pubkey: " + new Buffer(pubKey).toString('hex'));
 
 // ==== Connect to bitcoind
 function connectBitcoin() {
-    var clientOpts = {host:"rapidraven.com", port:8332, user:'autescrow', pass:''};
+    var clientOpts = {host:"rapidraven.com", port:8332, user:'autescrow', pass:'', timeout:1000};
     var conf;
     try {
         conf = Fs.readFileSync(process.env.HOME + '/.bitcoin/bitcoin.conf').toString();
@@ -285,20 +285,20 @@ function getRequestHandler(request, response) {
     headers["Access-Control-Allow-Credentials"] = false;
     headers["Access-Control-Max-Age"] = '86400'; // 24 hours
     headers["Access-Control-Allow-Headers"] = "X-Requested-With,X-HTTP-Method-Override,Content-Type,Accept";
-            headers["Content-Type"] ="text/plain";
+    headers["Content-Type"] ="text/plain";
     var path = Url.parse(request.url).path;
     console.log("GET " + path);
     try {
-        if (path.match(/^\/sha5121\/[0-9a-f]{32}./)) {
+        if (path.match(/^\/sha512\/[0-9a-f]{128}$/)) {
             headers["Content-Type"] ="application/octet-stream";
-            response.writeHead(200, headers);
-            var stream = Fs.createReadStream(path);
+            var stream = Fs.createReadStream("." + path);
             stream.on("error", function(e) {
-                          response.writeHead(404, "Not Found");
-                          response.write("Not found.\r\n\r\n");
-                          response.end();
-                      });
-            stream.setEncoding("ascii");
+                console.error(e);
+                response.writeHead(404, "Not Found");
+                response.write("hash " + path + " not found.\r\n\r\n");
+                response.end();
+            });
+            response.writeHead(200, headers);
             stream.pipe(response);
             return;
         } else if (path === '/pubKey') {
@@ -346,9 +346,39 @@ function getByHashSync(blobHash) {
     return Fs.readFileSync("sha512/" + blobHash).toString();
 }
 
+function putRequestHandler(req, response) {
+    if (req.method !== 'PUT') { return; }
+    var path = Url.parse(req.url).path;
+    if (path != "/sha512") { return; }
+    var filename = "tmp-autoescrow-" + Date.now() + "-" + Math.random() + ".tmp";
+    var wstream = Fs.createWriteStream(filename);
+    var hasher = Crypto.createHash('sha512');
+    // TODO: limit max size, throughput.
+    req.on('data', function(chunk) {
+        hasher.update(chunk);
+        wstream.write(chunk);
+    });
+    req.on('end', function() {
+        wstream.close();
+        var hexKey = hasher.digest('hex');
+        Fs.rename(filename, 'sha512/' + hexKey, function(err) {
+            if (err) {
+                throw err;
+            }
+            var headers = {};
+            headers["Content-type"] = "text/html";
+            response.writeHead(200, headers);
+            response.write(hexKey);
+            response.end();
+        });
+    });
+}
+
+
 var server = Http.createServer();
 server.listen(8888);
 server.addListener('request', postRequestHandler);
 server.addListener('request', getRequestHandler);
 server.addListener('request', optionsRequestHandler);
+server.addListener('request', putRequestHandler);
 Sys.puts("Listening on port 8888.");

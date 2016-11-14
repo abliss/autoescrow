@@ -1,4 +1,4 @@
-var url = 'https://autoescrow.firebaseIO-demo.com/lobby0';
+var url = 'https://autoescrow.firebaseio.com/lobby0';
 var myRootRef = new Firebase(url);
 var myId = Math.random();
 var myPrivKey = '';
@@ -230,7 +230,7 @@ function propose(msgObj) {
         evaluator: EVALUATOR_HASH,
         players: [{key:nacl.to_hex(myPubKey)},
                   {key:eirKeyHex}],
-        rake: 1,
+        rake: 50000,
         nonce: Math.random()
     };
     var client = newXHR();
