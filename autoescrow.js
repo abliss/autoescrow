@@ -346,30 +346,44 @@ function getByHashSync(blobHash) {
     return Fs.readFileSync("sha512/" + blobHash).toString();
 }
 
+function error(response, err) {
+    var headers = {};
+    headers["Content-Type"] ="text/plain";
+    response.writeHead(500, headers);
+    response.write(err.toString());
+    response.end();
+}
 function putRequestHandler(req, response) {
+    var path, filename, wstream, hasher;
     if (req.method !== 'PUT') { return; }
-    var path = Url.parse(req.url).path;
+    path = Url.parse(req.url).path;
     if (path != "/sha512") { return; }
-    var filename = "tmp-autoescrow-" + Date.now() + "-" + Math.random() + ".tmp";
-    var wstream = Fs.createWriteStream(filename);
-    var hasher = Crypto.createHash('sha512');
+    filename = "tmp-autoescrow-" + Date.now() + "-" + Math.random() + ".tmp";
+    wstream = Fs.createWriteStream(filename);
+    hasher = Crypto.createHash('sha512');
+    wstream.on('error', function(e) {error(response, e);});
     // TODO: limit max size, throughput.
     req.on('data', function(chunk) {
         hasher.update(chunk);
         wstream.write(chunk);
     });
     req.on('end', function() {
-        wstream.close();
-        var hexKey = hasher.digest('hex');
-        Fs.rename(filename, 'sha512/' + hexKey, function(err) {
+        wstream.close(function(err) {
             if (err) {
-                throw err;
+                error(response, err);
+            } else {
+                var hexKey = hasher.digest('hex');
+                Fs.rename(filename, 'sha512/' + hexKey, function(err) {
+                    if (err) {
+                        throw err;
+                    }
+                    var headers = {};
+                    headers["Content-type"] = "text/html";
+                    response.writeHead(200, headers);
+                    response.write(hexKey);
+                    response.end();
+                });
             }
-            var headers = {};
-            headers["Content-type"] = "text/html";
-            response.writeHead(200, headers);
-            response.write(hexKey);
-            response.end();
         });
     });
 }
